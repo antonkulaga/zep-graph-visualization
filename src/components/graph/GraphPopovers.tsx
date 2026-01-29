@@ -10,6 +10,7 @@ import { getNodeColor } from "@/lib/utils/nodeColors";
 import { useTheme } from "next-themes";
 import { useMemo } from "react";
 import { formatDate } from "@/lib/utils/dates";
+import { X } from "lucide-react";
 
 interface GraphPopoversProps {
   showNodePopup: boolean;
@@ -107,14 +108,23 @@ export function GraphPopovers({
         >
           <div className="flex items-center justify-between p-4 border-b border-border">
             <h4 className="font-medium leading-none">Node Details</h4>
-            {primaryNodeLabel && (
-              <span
-                className="text-xs px-2 py-1 rounded-full text-white font-medium"
-                style={{ backgroundColor: labelColor }}
+            <div className="flex items-center gap-2">
+              {primaryNodeLabel && (
+                <span
+                  className="text-xs px-2 py-1 rounded-full text-white font-medium"
+                  style={{ backgroundColor: labelColor }}
+                >
+                  {primaryNodeLabel}
+                </span>
+              )}
+              <button
+                onClick={() => onOpenChange?.(false)}
+                className="p-1 rounded-md hover:bg-muted transition-colors"
+                aria-label="Close"
               >
-                {primaryNodeLabel}
-              </span>
-            )}
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div
             className="max-h-[60vh] overflow-y-auto p-4"
@@ -211,7 +221,16 @@ export function GraphPopovers({
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="p-4 border-b border-border">
-            <h4 className="font-medium leading-none mb-2">Relationship</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium leading-none">Relationship</h4>
+              <button
+                onClick={() => onOpenChange?.(false)}
+                className="p-1 rounded-md hover:bg-muted transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <div className="p-2 bg-muted rounded-md">
               <p className="text-sm break-all">
                 {edgePopupContent?.source.name || "Unknown"} →{" "}
