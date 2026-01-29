@@ -99,24 +99,30 @@ export function GraphPopovers({
           <div className="w-4 h-4 pointer-events-none" />
         </PopoverTrigger>
         <PopoverContent
-          className="w-80 overflow-hidden"
+          className="w-96 p-0"
           side="bottom"
           align="end"
           sideOffset={5}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="space-y-2">
-            <div className="flex items-center justify-between mb-1">
-              <h4 className="font-medium leading-none">Node Details</h4>
-              {primaryNodeLabel && (
-                <span
-                  className="text-xs px-2 py-1 rounded-full text-white font-medium"
-                  style={{ backgroundColor: labelColor }}
-                >
-                  {primaryNodeLabel}
-                </span>
-              )}
-            </div>
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <h4 className="font-medium leading-none">Node Details</h4>
+            {primaryNodeLabel && (
+              <span
+                className="text-xs px-2 py-1 rounded-full text-white font-medium"
+                style={{ backgroundColor: labelColor }}
+              >
+                {primaryNodeLabel}
+              </span>
+            )}
+          </div>
+          <div
+            className="max-h-[60vh] overflow-y-auto p-4"
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "rgba(155, 155, 155, 0.5) transparent",
+            }}
+          >
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground break-all">
                 <span className="text-sm text-black font-medium dark:text-white mr-2">
@@ -165,25 +171,9 @@ export function GraphPopovers({
                   <p className="text-sm font-medium text-black dark:text-white mb-1">
                     Summary:
                   </p>
-                  <div
-                    className="max-h-[200px] overflow-y-auto relative"
-                    style={{
-                      scrollbarWidth: "thin",
-                      scrollbarColor: "rgba(155, 155, 155, 0.5) transparent",
-                      pointerEvents: "auto",
-                      touchAction: "auto",
-                      WebkitOverflowScrolling: "touch",
-                    }}
-                    onWheel={(e) => {
-                      e.stopPropagation();
-                      const target = e.currentTarget;
-                      target.scrollTop += e.deltaY;
-                    }}
-                  >
-                    <p className="text-sm text-muted-foreground break-words pr-4">
-                      {nodePopupContent.node.summary}
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground break-words">
+                    {nodePopupContent.node.summary}
+                  </p>
                 </div>
               )}
 
@@ -214,23 +204,31 @@ export function GraphPopovers({
           <div className="w-4 h-4 pointer-events-none" />
         </PopoverTrigger>
         <PopoverContent
-          className="w-80 overflow-hidden"
+          className="w-96 p-0"
           side="bottom"
           align="end"
           sideOffset={5}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="mb-4 p-2 bg-muted rounded-md">
-            <p className="text-sm break-all">
-              {edgePopupContent?.source.name || "Unknown"} →{" "}
-              <span className="font-medium">
-                {edgePopupContent?.relation.name || "Unknown"}
-              </span>{" "}
-              → {edgePopupContent?.target.name || "Unknown"}
-            </p>
+          <div className="p-4 border-b border-border">
+            <h4 className="font-medium leading-none mb-2">Relationship</h4>
+            <div className="p-2 bg-muted rounded-md">
+              <p className="text-sm break-all">
+                {edgePopupContent?.source.name || "Unknown"} →{" "}
+                <span className="font-medium">
+                  {edgePopupContent?.relation.name || "Unknown"}
+                </span>{" "}
+                → {edgePopupContent?.target.name || "Unknown"}
+              </p>
+            </div>
           </div>
-          <div className="space-y-2">
-            <h4 className="font-medium leading-none">Relationship</h4>
+          <div
+            className="max-h-[60vh] overflow-y-auto p-4"
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "rgba(155, 155, 155, 0.5) transparent",
+            }}
+          >
             <div className="grid gap-2">
               <p className="text-sm text-muted-foreground break-all">
                 <span className="text-sm font-medium text-black dark:text-white mr-2">
@@ -257,7 +255,7 @@ export function GraphPopovers({
                   <p className="text-sm font-medium text-black dark:text-white">
                     Episodes:
                   </p>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex flex-wrap gap-2 mt-1">
                     {edgePopupContent.relation.episodes.map((episode) => (
                       <span
                         key={episode}

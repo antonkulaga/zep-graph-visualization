@@ -93,50 +93,127 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
     // Convert raw triplets to graph triplets
     const graphTriplets = useMemo(() => toGraphTriplets(triplets), [triplets]);
 
-    // Extract all unique labels from triplets
+    // Helper function to get effective label for a node
+    const getEffectiveLabel = (node: { primaryLabel?: string }) => {
+      return node.primaryLabel || "Entity";
+    };
+
+    // Count nodes per label (computed first for sorting)
+    const nodeCountsByLabel = useMemo(() => {
+      const counts = new Map<string, number>();
+      const seenNodes = new Set<string>();
+      
+      graphTriplets.forEach((triplet) => {
+        // Count source node
+        if (!seenNodes.has(triplet.source.id)) {
+          seenNodes.add(triplet.source.id);
+          const label = getEffectiveLabel(triplet.source);
+          counts.set(label, (counts.get(label) || 0) + 1);
+        }
+        
+        // Count target node
+        if (!seenNodes.has(triplet.target.id)) {
+          seenNodes.add(triplet.target.id);
+          const label = getEffectiveLabel(triplet.target);
+          counts.set(label, (counts.get(label) || 0) + 1);
+        }
+      });
+      
+      return counts;
+    }, [graphTriplets]);
+
+    // Extract all unique labels from triplets, sorted by count descending
     const allLabels = useMemo(() => {
       const labels = new Set<string>();
-      labels.add("Entity"); // Always include Entity as default
+      const seenNodes = new Set<string>();
 
       graphTriplets.forEach((triplet) => {
-        if (triplet.source.primaryLabel)
-          labels.add(triplet.source.primaryLabel);
-        if (triplet.target.primaryLabel)
-          labels.add(triplet.target.primaryLabel);
+        // Add source node's effective label
+        if (!seenNodes.has(triplet.source.id)) {
+          seenNodes.add(triplet.source.id);
+          labels.add(getEffectiveLabel(triplet.source));
+        }
+        
+        // Add target node's effective label
+        if (!seenNodes.has(triplet.target.id)) {
+          seenNodes.add(triplet.target.id);
+          labels.add(getEffectiveLabel(triplet.target));
+        }
       });
 
       return Array.from(labels).sort((a, b) => {
-        // Always put "Entity" first
-        if (a === "Entity") return -1;
-        if (b === "Entity") return 1;
-        // Sort others alphabetically
+        // Sort by count descending
+        const countA = nodeCountsByLabel.get(a) || 0;
+        const countB = nodeCountsByLabel.get(b) || 0;
+        if (countB !== countA) return countB - countA;
+        // If counts are equal, sort alphabetically
         return a.localeCompare(b);
       });
+    }, [graphTriplets, nodeCountsByLabel]);
+
+    // Helper function to get effective edge name for filtering
+    const getEffectiveEdgeName = (relation: { type: string; name: string }) => {
+      // Prefer name if it exists and is meaningful, otherwise fall back to type
+      if (relation.name && relation.name.trim()) {
+        return relation.name;
+      }
+      return relation.type;
+    };
+
+    // Count edges per name (computed first for sorting)
+    const edgeCountsByType = useMemo(() => {
+      const counts = new Map<string, number>();
+      
+      graphTriplets.forEach((triplet) => {
+        // Skip isolated node placeholder edges
+        if (triplet.relation.type === "_isolated_node_") return;
+        
+        const edgeName = getEffectiveEdgeName(triplet.relation);
+        if (edgeName && edgeName.trim()) {
+          counts.set(edgeName, (counts.get(edgeName) || 0) + 1);
+        }
+      });
+      
+      return counts;
     }, [graphTriplets]);
 
-    // Extract all unique edge types from triplets (both type and name fields)
+    // Extract all unique edge names from triplets, sorted by count descending
     const allEdgeTypes = useMemo(() => {
-      const edgeTypes = new Set<string>();
+      const edgeNames = new Set<string>();
 
       graphTriplets.forEach((triplet) => {
         // Skip isolated node placeholder edges
         if (triplet.relation.type === "_isolated_node_") return;
         
-        // Add the relationship type if it exists and is meaningful
-        if (triplet.relation.type && triplet.relation.type.trim()) {
-          edgeTypes.add(triplet.relation.type);
-        }
-        
-        // Add the edge name if it exists, is meaningful, and different from type
-        if (triplet.relation.name && triplet.relation.name.trim()) {
-          // Only add if different from type (avoid duplicates)
-          if (triplet.relation.name !== triplet.relation.type) {
-            edgeTypes.add(triplet.relation.name);
-          }
+        const edgeName = getEffectiveEdgeName(triplet.relation);
+        if (edgeName && edgeName.trim()) {
+          edgeNames.add(edgeName);
         }
       });
 
-      return Array.from(edgeTypes).sort((a, b) => a.localeCompare(b));
+      return Array.from(edgeNames).sort((a, b) => {
+        // Sort by count descending
+        const countA = edgeCountsByType.get(a) || 0;
+        const countB = edgeCountsByType.get(b) || 0;
+        if (countB !== countA) return countB - countA;
+        // If counts are equal, sort alphabetically
+        return a.localeCompare(b);
+      });
+    }, [graphTriplets, edgeCountsByType]);
+
+    // Total unique nodes count
+    const totalNodesCount = useMemo(() => {
+      const seenNodes = new Set<string>();
+      graphTriplets.forEach((triplet) => {
+        seenNodes.add(triplet.source.id);
+        seenNodes.add(triplet.target.id);
+      });
+      return seenNodes.size;
+    }, [graphTriplets]);
+
+    // Total edges count (excluding isolated node placeholders)
+    const totalEdgesCount = useMemo(() => {
+      return graphTriplets.filter(t => t.relation.type !== "_isolated_node_").length;
     }, [graphTriplets]);
 
     // Initialize selected node types when allLabels changes
@@ -209,23 +286,21 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
     const filteredGraphTriplets = useMemo(() => {
       return graphTriplets.filter((triplet) => {
         // Check if source node type is selected
-        const sourceLabel = triplet.source.primaryLabel || "Entity";
+        const sourceLabel = getEffectiveLabel(triplet.source);
         if (!selectedNodeTypes.has(sourceLabel)) return false;
 
         // Check if target node type is selected
-        const targetLabel = triplet.target.primaryLabel || "Entity";
+        const targetLabel = getEffectiveLabel(triplet.target);
         if (!selectedNodeTypes.has(targetLabel)) return false;
 
         // For isolated node placeholders, only check node types
         if (triplet.relation.type === "_isolated_node_") return true;
 
-        // Check if edge type is selected (check both type and name)
-        const edgeType = triplet.relation.type;
-        const edgeName = triplet.relation.name;
-        const edgeTypeSelected = edgeType && selectedEdgeTypes.has(edgeType);
-        const edgeNameSelected = edgeName && edgeName !== edgeType && selectedEdgeTypes.has(edgeName);
+        // Check if edge name is selected
+        const edgeName = getEffectiveEdgeName(triplet.relation);
+        if (!edgeName || !selectedEdgeTypes.has(edgeName)) return false;
         
-        return edgeTypeSelected || edgeNameSelected;
+        return true;
       });
     }, [graphTriplets, selectedNodeTypes, selectedEdgeTypes]);
 
@@ -381,10 +456,10 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
     return (
       <div className={className}>
         {/* Entity Types Legend - Top Left */}
-        <div className="absolute top-4 left-4 z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3 max-w-[220px]">
+        <div className="absolute top-4 left-4 z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3 max-w-[280px]">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-semibold text-muted-foreground">
-              Node Labels ({selectedNodeTypes.size}/{allLabels.length})
+              Nodes ({totalNodesCount})
             </h4>
             <button
               onClick={toggleAllNodeTypes}
@@ -424,6 +499,9 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
                   }}
                 />
                 <span className="text-xs truncate">{label}</span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  ({nodeCountsByLabel.get(label) || 0})
+                </span>
               </button>
             ))}
           </div>
@@ -511,10 +589,10 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
         </div>
 
         {/* Edge Types Legend - Top Right */}
-        <div className="absolute top-4 right-4 z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3 max-w-[240px]">
+        <div className="absolute top-4 right-4 z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-3 max-w-[280px]">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-semibold text-muted-foreground">
-              Edge Types ({selectedEdgeTypes.size}/{allEdgeTypes.length})
+              Edges ({totalEdgesCount})
             </h4>
             <button
               onClick={toggleAllEdgeTypes}
@@ -545,6 +623,9 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
                 </div>
                 <div className="w-4 h-0.5 bg-slate-400 dark:bg-slate-500 flex-shrink-0" />
                 <span className="text-xs font-mono truncate">{edgeType}</span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  ({edgeCountsByType.get(edgeType) || 0})
+                </span>
               </button>
             ))}
             {allEdgeTypes.length === 0 && (
@@ -556,6 +637,7 @@ export const GraphVisualization = forwardRef<GraphRef, GraphVisualizationProps>(
         {triplets.length > 0 ? (
           filteredGraphTriplets.length > 0 ? (
             <Graph
+              key={`graph-${filteredGraphTriplets.length}-${Array.from(selectedNodeTypes).sort().join(",")}-${Array.from(selectedEdgeTypes).sort().join(",")}`}
               ref={ref}
               triplets={filteredGraphTriplets}
               width={width}

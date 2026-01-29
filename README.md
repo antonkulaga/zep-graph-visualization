@@ -86,7 +86,7 @@ Create a `.env` file in the root directory:
 # FalkorDB Connection Settings
 FALKORDB_HOST=localhost
 FALKORDB_PORT=6380
-FALKORDB_PASSWORD=InOpenSourceWeTrust!
+FALKORDB_PASSWORD=YOUR_PASSWORD
 
 # Zep Cloud API Key (optional - only for Zep Cloud mode)
 ZEP_API_KEY=your_zep_api_key

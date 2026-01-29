@@ -2,20 +2,12 @@
 
 import { useState, ChangeEvent, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Share2, RefreshCw, Play } from "lucide-react";
+import { RefreshCw, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { GraphVisualization } from "@/components/graph/GraphVisualization";
 import { GraphRef } from "@/components/graph/Graph";
 import { RawTriplet } from "@/lib/types/graph";
@@ -29,7 +21,6 @@ interface UserDetailsProps {
 export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
   const [isLoadingGraph, setIsLoadingGraph] = useState(false);
   const [triplets, setTriplets] = useState<RawTriplet[]>([]);
-  const [graphDialogOpen, setGraphDialogOpen] = useState(false);
   const graphRef = useRef<GraphRef>(null);
 
   // Mode: "zep" for Zep Cloud, "falkordb" for direct FalkorDB
@@ -44,6 +35,7 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
   const [selectedGraph, setSelectedGraph] = useState("");
   const [isLoadingGraphs, setIsLoadingGraphs] = useState(false);
   const [cypherQuery, setCypherQuery] = useState(DEFAULT_CYPHER_QUERY);
+  const [currentGraphName, setCurrentGraphName] = useState("");
 
   // Load available graphs when in FalkorDB mode
   const loadAvailableGraphs = async () => {
@@ -56,9 +48,7 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
       }
       const data = await response.json();
       setAvailableGraphs(data.graphs || []);
-      if (data.graphs?.length > 0 && !selectedGraph) {
-        setSelectedGraph(data.graphs[0]);
-      }
+      // Don't auto-select - let user choose explicitly
     } catch (error) {
       console.error("Error loading graphs:", error);
       toast.error(
@@ -75,12 +65,7 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
     }
   }, [mode]);
 
-  // Auto-load graph when selection changes in FalkorDB mode
-  useEffect(() => {
-    if (mode === "falkordb" && selectedGraph) {
-      handleLoadFalkorDBGraph(selectedGraph);
-    }
-  }, [selectedGraph, mode]);
+  // No auto-load - user must explicitly run the query
 
   // Load FalkorDB graph with custom query
   const handleLoadFalkorDBGraph = async (graphName: string, query?: string) => {
@@ -105,7 +90,7 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
 
       const data = await response.json();
       setTriplets(data.triplets);
-      setGraphDialogOpen(true);
+      setCurrentGraphName(graphName);
     } catch (error) {
       console.error("Error loading graph:", error);
       toast.error(
@@ -120,6 +105,8 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
   const handleRunQuery = () => {
     if (selectedGraph) {
       handleLoadFalkorDBGraph(selectedGraph, cypherQuery);
+    } else {
+      toast.error("Please select a graph first");
     }
   };
 
@@ -129,51 +116,39 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
         toast.error("Please enter an ID");
         return;
       }
-    } else {
-      if (!selectedGraph) {
-        toast.error("Please select a graph");
-        return;
-      }
-    }
 
-    setIsLoadingGraph(true);
-    try {
-      let response;
-
-      if (mode === "zep") {
+      setIsLoadingGraph(true);
+      try {
         const endpointType = isGroupMode ? "group" : "user";
-        response = await fetch(
+        const response = await fetch(
           `/api/graph/${endpointType}/${encodeURIComponent(entityId)}/triplets`
         );
-      } else {
-        response = await fetch(
-          `/api/falkordb/${encodeURIComponent(selectedGraph)}/triplets`
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to load graph");
+        }
+
+        const data = await response.json();
+        setTriplets(data.triplets);
+        setCurrentGraphName(`${isGroupMode ? "Group" : "User"}: ${entityId}`);
+      } catch (error) {
+        console.error("Error loading graph:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load graph"
         );
+      } finally {
+        setIsLoadingGraph(false);
       }
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to load graph");
-      }
-
-      const data = await response.json();
-      setTriplets(data.triplets);
-
-      // Open the dialog when graph data is loaded
-      setGraphDialogOpen(true);
-    } catch (error) {
-      console.error("Error loading graph:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to load graph"
-      );
-    } finally {
-      setIsLoadingGraph(false);
+    } else {
+      handleRunQuery();
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 py-4">
+    <div className="flex flex-col h-full space-y-4">
+      {/* Controls - Always visible at top */}
+      <div className="flex-shrink-0 space-y-4 p-4 bg-background border rounded-lg">
         {/* Mode Toggle */}
         <div className="flex items-center space-x-4 pb-4 border-b">
           <Label className="font-semibold">Data Source:</Label>
@@ -218,33 +193,37 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
                   setEntityId(e.target.value)
                 }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isLoadingGraph && entityId.trim()) {
+                    handleLoadGraph();
+                  }
+                }}
               />
             </div>
 
             <Button
               variant="default"
-              size="lg"
-              disabled={isLoadingGraph}
-              className="mt-2 sm:mt-0 text-lg font-medium"
+              size="default"
+              disabled={isLoadingGraph || !entityId.trim()}
+              className="mt-2 sm:mt-0"
               onClick={handleLoadGraph}
             >
               {isLoadingGraph ? (
-                "Loading..."
+                <RefreshCw size={16} className="animate-spin mr-1" />
               ) : (
-                <>
-                  <span className="mr-2">View Graph</span>
-                  <Share2 size={19} />
-                </>
+                <Play size={16} className="mr-1" />
               )}
+              RUN
             </Button>
           </div>
         ) : (
           /* FalkorDB Mode UI */
           <div className="flex flex-col gap-4">
-            {/* Graph Selection Row */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="flex-1 grid gap-2">
-                <div className="flex items-center gap-2">
+            {/* Graph Selection and Query Row */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+              {/* Graph Selection */}
+              <div className="flex-shrink-0 w-full lg:w-64">
+                <div className="flex items-center gap-2 mb-2">
                   <Label htmlFor="graph-select">Select Graph</Label>
                   <Button
                     variant="ghost"
@@ -258,11 +237,6 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
                       className={isLoadingGraphs ? "animate-spin" : ""}
                     />
                   </Button>
-                  {isLoadingGraph && (
-                    <span className="text-sm text-muted-foreground animate-pulse">
-                      Loading graph...
-                    </span>
-                  )}
                 </div>
                 <select
                   id="graph-select"
@@ -271,109 +245,104 @@ export function GraphClient({ userID: initialUserID }: UserDetailsProps) {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   disabled={isLoadingGraphs || isLoadingGraph}
                 >
-                  {availableGraphs.length === 0 ? (
-                    <option value="">
-                      {isLoadingGraphs ? "Loading..." : "No graphs available"}
+                  <option value="">
+                    {isLoadingGraphs ? "Loading..." : "-- Select a graph --"}
+                  </option>
+                  {availableGraphs.map((graph) => (
+                    <option key={graph} value={graph}>
+                      {graph}
                     </option>
-                  ) : (
-                    availableGraphs.map((graph) => (
-                      <option key={graph} value={graph}>
-                        {graph}
-                      </option>
-                    ))
-                  )}
+                  ))}
                 </select>
               </div>
 
-              {/* Show View Graph button only if dialog is closed and we have triplets */}
-              {!graphDialogOpen && triplets.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setGraphDialogOpen(true)}
-                  className="mt-2 sm:mt-0"
-                >
-                  <span className="mr-2">Show Graph</span>
-                  <Share2 size={19} />
-                </Button>
-              )}
-            </div>
-
-            {/* Cypher Query Row */}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="cypher-query" className="text-sm font-medium">
-                Cypher Query
-              </Label>
-              <div className="flex gap-2">
-                <input
-                  id="cypher-query"
-                  type="text"
-                  value={cypherQuery}
-                  onChange={(e) => setCypherQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !isLoadingGraph && selectedGraph) {
-                      handleRunQuery();
-                    }
-                  }}
-                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  placeholder="MATCH (n) OPTIONAL MATCH (n)-[e]-(m) RETURN * LIMIT 100"
-                  disabled={isLoadingGraph}
-                />
-                <Button
-                  variant="default"
-                  size="default"
-                  onClick={handleRunQuery}
-                  disabled={isLoadingGraph || !selectedGraph}
-                  className="px-4"
-                >
-                  {isLoadingGraph ? (
-                    <RefreshCw size={16} className="animate-spin" />
-                  ) : (
-                    <>
-                      <Play size={16} className="mr-1" />
-                      RUN
-                    </>
-                  )}
-                </Button>
+              {/* Cypher Query */}
+              <div className="flex-1">
+                <Label htmlFor="cypher-query" className="text-sm font-medium mb-2 block">
+                  Cypher Query
+                </Label>
+                <div className="flex gap-2">
+                  <input
+                    id="cypher-query"
+                    type="text"
+                    value={cypherQuery}
+                    onChange={(e) => setCypherQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isLoadingGraph && selectedGraph) {
+                        handleRunQuery();
+                      }
+                    }}
+                    className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="MATCH (n) OPTIONAL MATCH (n)-[e]-(m) RETURN * LIMIT 100"
+                    disabled={isLoadingGraph}
+                  />
+                  <Button
+                    variant="default"
+                    size="default"
+                    onClick={handleRunQuery}
+                    disabled={isLoadingGraph || !selectedGraph}
+                    className="px-4"
+                  >
+                    {isLoadingGraph ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <>
+                        <Play size={16} className="mr-1" />
+                        RUN
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
+
+            {/* Loading indicator */}
+            {isLoadingGraph && (
+              <div className="text-sm text-muted-foreground animate-pulse">
+                Loading graph data...
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Graph Dialog */}
-      <Dialog open={graphDialogOpen} onOpenChange={setGraphDialogOpen}>
-        <DialogContent className="max-w-none sm:max-w-none md:max-w-none lg:max-w-none w-[100vw] h-[100vh]">
-          <DialogHeader>
-            <DialogTitle>
-              {mode === "zep"
-                ? `${isGroupMode ? "Group" : "User"} Relationship Graph`
-                : `Graph: ${selectedGraph}`}
-            </DialogTitle>
-            <DialogDescription>
-              {mode === "zep"
-                ? `Visualization of ${isGroupMode ? "group" : "user"} relationships and connections`
-                : `Visualization of the ${selectedGraph} graph from FalkorDB`}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="relative flex-1 w-full h-[calc(80vh-8rem)]">
-            {triplets.length > 0 && (
+      {/* Graph Visualization - Takes remaining space */}
+      <div className="flex-1 min-h-0 relative rounded-lg overflow-hidden border">
+        {triplets.length > 0 ? (
+          <>
+            {/* Graph title bar */}
+            <div className="absolute top-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-sm border-b px-4 py-2">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">
+                  Graph: {currentGraphName}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {triplets.length} triplets
+                </span>
+              </div>
+            </div>
+            <div className="h-full pt-10">
               <GraphVisualization
                 ref={graphRef}
                 triplets={triplets}
                 zoomOnMount={true}
               />
-            )}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="text-center space-y-2">
+              <p className="text-lg">No graph loaded</p>
+              <p className="text-sm">
+                {mode === "falkordb"
+                  ? "Select a graph and click RUN to visualize"
+                  : "Enter an ID and click RUN to visualize"
+                }
+              </p>
+            </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setGraphDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
     </div>
   );
 }
