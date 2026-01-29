@@ -59,9 +59,30 @@ export function GraphPopovers({
     if (!nodePopupContent) {
       return [];
     }
+    
+    // Helper to check if a value is an embedding (array of numbers)
+    const isEmbedding = (value: unknown): boolean => {
+      if (!Array.isArray(value)) return false;
+      if (value.length === 0) return false;
+      // Check if it's a large array of numbers (typical for embeddings)
+      if (value.length > 10 && typeof value[0] === "number") return true;
+      return false;
+    };
+    
+    // Filter out labels, embedding properties, and large numeric arrays
     const entityProperties = Object.fromEntries(
       Object.entries(nodePopupContent.node.attributes || {}).filter(
-        ([key]) => key !== "labels"
+        ([key, value]) => {
+          // Exclude labels
+          if (key === "labels") return false;
+          // Exclude properties with "embedding" in the name (case-insensitive)
+          if (key.toLowerCase().includes("embedding")) return false;
+          // Exclude properties with "vector" in the name (case-insensitive)
+          if (key.toLowerCase().includes("vector")) return false;
+          // Exclude large numeric arrays (embeddings)
+          if (isEmbedding(value)) return false;
+          return true;
+        }
       )
     );
 

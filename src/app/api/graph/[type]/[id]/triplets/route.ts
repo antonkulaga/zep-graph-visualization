@@ -160,8 +160,8 @@ export async function GET(
 
     if (!ZEP_API_KEY) {
       return NextResponse.json(
-        { error: "ZEP_API_KEY is not set" },
-        { status: 500 }
+        { error: "Zep Cloud mode requires ZEP_API_KEY to be set. Use FalkorDB mode instead for self-hosted graphs." },
+        { status: 400 }
       );
     }
 

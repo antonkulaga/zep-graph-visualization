@@ -1,18 +1,17 @@
-# Zep Graph Visualization
+# Graph Visualization
 
-A Next.js application for visualizing graph data using D3.js, built to work with [Zep](https://help.getzep.com). This is designed to serve as a reference implementation of Graph Visualization for Zep users in their applications.
-
-Zep is a memory layer for AI assistants and agents that continuously learns from user interactions and changing business data. Zep ensures that your Agent has a complete and holistic view of the user, enabling you to build more personalized and accurate user experiences.
+A Next.js application for visualizing graph data using D3.js. Supports both [FalkorDB](https://www.falkordb.com/) (self-hosted graph database) and [Zep Cloud](https://help.getzep.com).
 
 ## Features
 
-- Interactive graph visualization of knowledge graphs built with Zep
-- Force-directed layout with D3.js
+- Interactive graph visualization with force-directed layout
+- **FalkorDB Mode**: Connect directly to your self-hosted FalkorDB instance
+- **Zep Cloud Mode**: Connect to Zep Cloud for AI memory graph visualization
 - Zoom and pan functionality
 - Node and edge highlighting
-- Node and edge inspection
+- Node and edge inspection with detailed popovers
 - Dark and light mode support
-- Custom node colors based on entity types
+- Custom node colors based on entity types/labels
 - Edge labeling
 
 ## Technology Stack
@@ -22,14 +21,45 @@ Zep is a memory layer for AI assistants and agents that continuously learns from
 - [D3.js](https://d3js.org/) for graph visualization
 - [Tailwind CSS](https://tailwindcss.com/) for styling
 - [Shadcn UI](https://ui.shadcn.com/) for UI components
-- [Zep Cloud SDK](https://help.getzep.com/sdks/)
+- [FalkorDB](https://www.falkordb.com/) - Graph database client
+- [Zep Cloud SDK](https://help.getzep.com/sdks/) (optional)
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ installed
-- A Zep API key (if connecting to Zep Cloud)
+- Node.js 18+ or Bun installed
+- A FalkorDB instance (local or remote) OR a Zep API key
+
+### FalkorDB Setup (Recommended)
+
+Start FalkorDB with Docker:
+
+```bash
+docker run -p 6380:6379 -p 3001:3000 \
+  -e REDIS_ARGS="--requirepass InOpenSourceWeTrust!" \
+  -e BROWSER=1 \
+  falkordb/falkordb:latest
+```
+
+Or use docker-compose:
+
+```yaml
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6380:6379"   # FalkorDB port
+      - "3001:3000"   # FalkorDB Browser UI
+    environment:
+      - REDIS_ARGS=--requirepass InOpenSourceWeTrust!
+      - BROWSER=1
+    volumes:
+      - falkordb_data:/data
+
+volumes:
+  falkordb_data:
+```
 
 ### Installation
 
@@ -43,42 +73,71 @@ cd zep-graph-visualization
 2. Install dependencies:
 
 ```bash
+bun install
+# or
 npm install
-# or
-yarn install
-# or
-pnpm install
 ```
 
 3. Set up environment variables:
 
-Create a `.env.local` file in the root directory with the following variables:
+Create a `.env` file in the root directory:
 
-```
+```bash
+# FalkorDB Connection Settings
+FALKORDB_HOST=localhost
+FALKORDB_PORT=6380
+FALKORDB_PASSWORD=InOpenSourceWeTrust!
+
+# Zep Cloud API Key (optional - only for Zep Cloud mode)
 ZEP_API_KEY=your_zep_api_key
 ```
 
 ### Running the Development Server
 
 ```bash
+bun dev
+# or
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
 ## Usage
 
-The application provides an interactive graph visualization of knowledge triplets from Zep. You can:
+The application provides two modes:
 
-- Click on nodes to see their details
-- Click on edges to see relationship information
+### FalkorDB Mode (Default)
+
+1. Toggle the data source to "FalkorDB"
+2. Select a graph from the dropdown (graphs are automatically loaded from your FalkorDB instance)
+3. Click "View Graph" to visualize
+
+### Zep Cloud Mode
+
+1. Toggle the data source to "Zep Cloud"
+2. Choose between User Mode or Group Mode
+3. Enter the User ID or Group ID
+4. Click "View Graph" to visualize
+
+### Graph Interaction
+
+- Click on nodes to see their details (name, labels, attributes, summary)
+- Click on edges to see relationship information (type, fact, episodes)
 - Zoom in/out using the mouse wheel
 - Pan the graph by dragging
-- Toggle between dark and light modes
+- Toggle between dark and light modes using the theme toggle
+
+## API Endpoints
+
+### FalkorDB Endpoints
+
+- `GET /api/falkordb/graphs` - List all available graphs
+- `GET /api/falkordb/[graphName]/triplets` - Get nodes and edges for a specific graph
+
+### Zep Cloud Endpoints
+
+- `GET /api/graph/user/[id]/triplets` - Get graph data for a user
+- `GET /api/graph/group/[id]/triplets` - Get graph data for a group
 
 ## License
 

@@ -344,8 +344,8 @@ export const Graph = forwardRef<GraphRef, GraphProps>(
         });
 
       zoomRef.current = zoom;
-      // @ts-ignore
-      svgElement.call(zoom).call(zoom.transform, d3.zoomIdentity.scale(0.8));
+      // @ts-ignore - Start at scale 1 to avoid zoom-out effect
+      svgElement.call(zoom).call(zoom.transform, d3.zoomIdentity);
 
       // Identify which nodes are isolated (not in any links)
       const nodeIdSet = new Set(nodes.map((n: any) => n.id));
@@ -912,7 +912,7 @@ export const Graph = forwardRef<GraphRef, GraphProps>(
         node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
       });
 
-      // Handle zoom-to-fit on mount
+      // Handle zoom-to-fit on mount - but don't zoom out too much
       let hasInitialized = false;
 
       simulation.on("end", () => {
@@ -936,10 +936,10 @@ export const Graph = forwardRef<GraphRef, GraphProps>(
             const midX = bounds.x + currentWidth / 2;
             const midY = bounds.y + currentHeight / 2;
 
-            // Calculate scale to fit with padding
-            const scale =
-              0.8 *
-              Math.min(fullWidth / currentWidth, fullHeight / currentHeight);
+            // Calculate scale to fit with padding, but cap minimum scale to avoid excessive zoom-out
+            const fitScale = Math.min(fullWidth / currentWidth, fullHeight / currentHeight);
+            // Use 0.9 multiplier and ensure we don't zoom out below 0.5
+            const scale = Math.max(0.5, Math.min(1.5, fitScale * 0.9));
 
             // Ensure we have valid numbers before creating transform
             if (isFinite(midX) && isFinite(midY) && isFinite(scale)) {
@@ -954,15 +954,15 @@ export const Graph = forwardRef<GraphRef, GraphProps>(
               // @ts-ignore
               svgElement
                 .transition()
-                .duration(750)
-                .ease(d3.easeCubicInOut) // Add easing for smoother transitions
+                .duration(500)
+                .ease(d3.easeCubicOut)
                 .call(zoomRef.current.transform, transform);
             } else {
               console.warn("Invalid transform values:", { midX, midY, scale });
               // Fallback to a simple center transform
               const transform = d3.zoomIdentity
                 .translate(fullWidth / 2, fullHeight / 2)
-                .scale(0.8);
+                .scale(1);
               svgElement.call(zoomRef.current.transform, transform);
             }
           }
